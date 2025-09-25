@@ -5,7 +5,6 @@ import 'screens/emergency_dashboard.dart';
 import 'screens/emergency_log.dart';
 import 'screens/first_aid_training.dart';
 import 'screens/location_map.dart';
-import 'screens/map_component.dart';
 import 'screens/offline_chatbot.dart';
 import 'screens/online_chatbot.dart';
 
@@ -72,7 +71,6 @@ class _MyHomePageState extends State<MyHomePage> {
     'Emergency Log',
     'First Aid Training',
     'Location Map',
-    'Map Component',
     'Offline Chatbot',
     'Online Chatbot',
   ];
@@ -84,7 +82,6 @@ class _MyHomePageState extends State<MyHomePage> {
     EmergencyLogScreen(),
     FirstAidTrainingScreen(),
     LocationMapScreen(),
-    MapComponentScreen(),
     OfflineChatbotScreen(),
     OnlineChatbotScreen(),
   ];

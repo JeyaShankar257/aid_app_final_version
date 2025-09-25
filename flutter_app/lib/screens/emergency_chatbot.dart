@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Message {
   final String id;
@@ -28,6 +29,7 @@ class EmergencyChatbotScreen extends StatefulWidget {
 
 class _EmergencyChatbotScreenState extends State<EmergencyChatbotScreen> {
   final TextEditingController _controller = TextEditingController();
+  final TextEditingController _apiKeyController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Message> _messages = [
     Message(
@@ -41,6 +43,12 @@ class _EmergencyChatbotScreenState extends State<EmergencyChatbotScreen> {
   ];
   bool _isOnline = true;
   bool _isLoading = false;
+  String? _customApiKey;
+  bool _showApiKeySettings = false;
+
+  // Default API key for instant functionality
+  static const String _defaultApiKey =
+      'AIzaSyD-kThkGoV8g6PMxsZc98xwQM2YmFXLQkk';
 
   final Map<String, List<String>> offlineResponses = {
     'emergency': [
@@ -69,11 +77,49 @@ class _EmergencyChatbotScreenState extends State<EmergencyChatbotScreen> {
   void initState() {
     super.initState();
     _isOnline = true; // You can use connectivity_plus for real online check
+    _loadCustomApiKey();
   }
+
+  // Load custom API key from preferences
+  Future<void> _loadCustomApiKey() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _customApiKey = prefs.getString('emergency_chatbot_api_key');
+      });
+    } catch (e) {
+      // If SharedPreferences fails, continue with default key
+      print('Failed to load custom API key: $e');
+    }
+  }
+
+  // Save custom API key to preferences
+  Future<void> _saveCustomApiKey(String apiKey) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (apiKey.trim().isEmpty) {
+        await prefs.remove('emergency_chatbot_api_key');
+        setState(() {
+          _customApiKey = null;
+        });
+      } else {
+        await prefs.setString('emergency_chatbot_api_key', apiKey.trim());
+        setState(() {
+          _customApiKey = apiKey.trim();
+        });
+      }
+    } catch (e) {
+      print('Failed to save custom API key: $e');
+    }
+  }
+
+  // Get the current API key (custom or default)
+  String get _currentApiKey => _customApiKey ?? _defaultApiKey;
 
   @override
   void dispose() {
     _controller.dispose();
+    _apiKeyController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -115,7 +161,7 @@ class _EmergencyChatbotScreenState extends State<EmergencyChatbotScreen> {
     try {
       final response = await http.post(
         Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=AIzaSyD-kThkGoV8g6PMxsZc98xwQM2YmFXLQkk',
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=$_currentApiKey',
         ),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -194,6 +240,34 @@ class _EmergencyChatbotScreenState extends State<EmergencyChatbotScreen> {
       appBar: AppBar(
         title: Text('Emergency AI Assistant'),
         actions: [
+          // API Key status indicator
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Chip(
+              label: Text(_customApiKey != null ? 'Custom API' : 'Default API'),
+              avatar: Icon(
+                _customApiKey != null ? Icons.person : Icons.settings,
+                size: 16,
+                color: _customApiKey != null ? Colors.green : Colors.blue,
+              ),
+              backgroundColor: _customApiKey != null
+                  ? Colors.green.shade100
+                  : Colors.blue.shade100,
+            ),
+          ),
+          // Settings button
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: () {
+              setState(() {
+                _showApiKeySettings = !_showApiKeySettings;
+                if (_showApiKeySettings) {
+                  _apiKeyController.text = _customApiKey ?? '';
+                }
+              });
+            },
+          ),
+          // Online/Offline status
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Chip(
@@ -205,6 +279,99 @@ class _EmergencyChatbotScreenState extends State<EmergencyChatbotScreen> {
       ),
       body: Column(
         children: [
+          // API Key Settings Panel
+          if (_showApiKeySettings)
+            Container(
+              padding: EdgeInsets.all(16),
+              color: Colors.grey.shade100,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.key, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text(
+                        'API Key Settings',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Spacer(),
+                      IconButton(
+                        icon: Icon(Icons.close),
+                        onPressed: () {
+                          setState(() {
+                            _showApiKeySettings = false;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Current: ${_customApiKey != null ? 'Using your custom API key' : 'Using default API key'}',
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                  SizedBox(height: 12),
+                  TextField(
+                    controller: _apiKeyController,
+                    decoration: InputDecoration(
+                      labelText: 'Your Gemini API Key (optional)',
+                      hintText: 'Leave empty to use default key',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.vpn_key),
+                      suffixIcon: _apiKeyController.text.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear),
+                              onPressed: () {
+                                _apiKeyController.clear();
+                              },
+                            )
+                          : null,
+                    ),
+                    onChanged: (value) {
+                      setState(() {}); // Refresh UI for suffix icon
+                    },
+                  ),
+                  SizedBox(height: 12),
+                  Row(
+                    children: [
+                      ElevatedButton(
+                        onPressed: () async {
+                          await _saveCustomApiKey(_apiKeyController.text);
+                          setState(() {
+                            _showApiKeySettings = false;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                _customApiKey != null
+                                    ? 'Custom API key saved!'
+                                    : 'Switched to default API key',
+                              ),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        },
+                        child: Text('Save'),
+                      ),
+                      SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _showApiKeySettings = false;
+                            _apiKeyController.text = _customApiKey ?? '';
+                          });
+                        },
+                        child: Text('Cancel'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
