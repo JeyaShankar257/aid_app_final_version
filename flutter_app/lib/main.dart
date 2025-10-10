@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
-import 'screens/emergency_chatbot.dart';
+// import 'screens/emergency_chatbot.dart';
 import 'screens/emergency_contacts.dart';
 import 'screens/emergency_dashboard.dart';
 import 'screens/emergency_log.dart';
 import 'screens/first_aid_training.dart';
 import 'screens/location_map.dart';
 import 'screens/offline_chatbot.dart';
+
+import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'screens/online_chatbot.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize tile caching system (FMTC v10+)
+  await FMTCObjectBoxBackend().initialise();
+  final store = FMTCStore('offline');
+  await store.manage.create(); // Creates a local cache folder
+
   runApp(const MyApp());
 }
 
@@ -65,7 +74,6 @@ class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
 
   static const List<String> _screenTitles = [
-    'Emergency Chatbot',
     'Emergency Contacts',
     'Emergency Dashboard',
     'Emergency Log',
@@ -76,7 +84,6 @@ class _MyHomePageState extends State<MyHomePage> {
   ];
 
   static final List<Widget> _screens = [
-    EmergencyChatbotScreen(),
     EmergencyContactsScreen(),
     EmergencyDashboardScreen(),
     EmergencyLogScreen(),

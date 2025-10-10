@@ -105,6 +105,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     }
     if (permission == LocationPermission.deniedForever) return;
     Position pos = await Geolocator.getCurrentPosition();
+    if (!mounted) return;
     final entry = LocationEntry(
       time: TimeOfDay.fromDateTime(DateTime.now()).format(context),
       lat: pos.latitude,
@@ -170,11 +171,12 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     final locationUrl = 'https://maps.google.com/?q=$lat,$lng';
     final timeline = [
       ...locationTimeline,
-      LocationEntry(
-        time: TimeOfDay.fromDateTime(now).format(context),
-        lat: lat,
-        lng: lng,
-      ),
+      if (mounted)
+        LocationEntry(
+          time: TimeOfDay.fromDateTime(now).format(context),
+          lat: lat,
+          lng: lng,
+        ),
     ];
     String timelineStr = '';
     for (int i = 0; i < timeline.length; i++) {

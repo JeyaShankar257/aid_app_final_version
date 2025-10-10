@@ -141,7 +141,8 @@ class _EmergencyLogScreenState extends State<EmergencyLogScreen> {
       );
       await prefs.setString('emergency_logs', logsJson);
     } catch (e) {
-      print('Error saving logs: $e');
+      // TODO: Replace with logging framework in production
+      // print('Error saving logs: $e');
     }
   }
 
@@ -191,14 +192,13 @@ class _EmergencyLogScreenState extends State<EmergencyLogScreen> {
 
     await _saveLogEntries();
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Emergency logged: $title'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Emergency logged: $title'),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   void _showAddLogDialog() {
@@ -225,7 +225,7 @@ class _EmergencyLogScreenState extends State<EmergencyLogScreen> {
                 ),
                 SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedCategory,
+                  initialValue: selectedCategory,
                   decoration: InputDecoration(labelText: 'Category'),
                   items: _emergencyCategories.map<DropdownMenuItem<String>>((
                     category,
@@ -253,7 +253,7 @@ class _EmergencyLogScreenState extends State<EmergencyLogScreen> {
                 ),
                 SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedSeverity,
+                  initialValue: selectedSeverity,
                   decoration: InputDecoration(labelText: 'Severity'),
                   items: ['Critical', 'High', 'Medium', 'Low'].map((severity) {
                     return DropdownMenuItem(
@@ -329,6 +329,7 @@ class _EmergencyLogScreenState extends State<EmergencyLogScreen> {
                 });
 
                 await _saveLogEntries();
+                if (!mounted) return;
                 Navigator.pop(context);
 
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -471,7 +472,7 @@ class _EmergencyLogScreenState extends State<EmergencyLogScreen> {
                                 leading: CircleAvatar(
                                   backgroundColor: _getCategoryColor(
                                     entry.category,
-                                  ).withOpacity(0.1),
+                                  ).withAlpha((0.1 * 255).toInt()),
                                   child: Icon(
                                     _getCategoryIcon(entry.category),
                                     color: _getCategoryColor(entry.category),
@@ -492,7 +493,7 @@ class _EmergencyLogScreenState extends State<EmergencyLogScreen> {
                                     ),
                                     SizedBox(height: 4),
                                     Text(
-                                      '${entry.timestamp.toString().split('.')[0]}',
+                                      entry.timestamp.toString().split('.')[0],
                                       style: TextStyle(fontSize: 12),
                                     ),
                                     if (entry.location != null)

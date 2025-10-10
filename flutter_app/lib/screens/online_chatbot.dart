@@ -11,6 +11,59 @@ class OnlineChatbotScreen extends StatefulWidget {
 }
 
 class _OnlineChatbotScreenState extends State<OnlineChatbotScreen> {
+  Future<void> _listAvailableModels() async {
+    if (_apiKey == null || _apiKey!.isEmpty) {
+      _messages.add(
+        _Message(
+          text: '⚠️ Please configure your Gemini API key first.',
+          sender: Sender.bot,
+          timestamp: DateTime.now(),
+          type: MessageType.general,
+        ),
+      );
+      setState(() {});
+      return;
+    }
+    final url =
+        'https://generativelanguage.googleapis.com/v1beta/models?key=$_apiKey';
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final models =
+            (data['models'] as List?)?.map((m) => m['name']).toList() ?? [];
+        _messages.add(
+          _Message(
+            text: 'Available Gemini models:\n${models.join('\n')}',
+            sender: Sender.bot,
+            timestamp: DateTime.now(),
+            type: MessageType.general,
+          ),
+        );
+      } else {
+        _messages.add(
+          _Message(
+            text: 'API error: ${response.statusCode}\n${response.body}',
+            sender: Sender.bot,
+            timestamp: DateTime.now(),
+            type: MessageType.general,
+          ),
+        );
+      }
+      setState(() {});
+    } catch (e) {
+      _messages.add(
+        _Message(
+          text: 'Error listing models: ${e.toString()}',
+          sender: Sender.bot,
+          timestamp: DateTime.now(),
+          type: MessageType.general,
+        ),
+      );
+      setState(() {});
+    }
+  }
+
   final TextEditingController _controller = TextEditingController();
   final TextEditingController _apiKeyController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -116,7 +169,7 @@ class _OnlineChatbotScreenState extends State<OnlineChatbotScreen> {
 
   Future<_BotResponse> _sendToGemini(String message) async {
     final endpoint =
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$_apiKey';
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$_apiKey';
     final systemInstruction = {
       "role": "user",
       "parts": [
@@ -198,7 +251,25 @@ class _OnlineChatbotScreenState extends State<OnlineChatbotScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Online Emergency Chatbot')),
+      appBar: AppBar(
+        title: const Text('Online Emergency Chatbot'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'API Key Settings',
+            onPressed: () {
+              setState(() {
+                _showApiKeyInput = true;
+              });
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.list),
+            tooltip: 'List Available Models',
+            onPressed: _listAvailableModels,
+          ),
+        ],
+      ),
       body: Column(
         children: [
           if (_showApiKeyInput)
