@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 
 class LocationMapScreen extends StatefulWidget {
   const LocationMapScreen({super.key});
@@ -16,6 +17,45 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
   final double _currentZoom = 15.0;
   final store = FMTCStore('offline');
   bool isDownloading = false;
+  LatLng? _currentLocation;
+  Future<void> _centerOnCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location services are disabled.')),
+        );
+        return;
+      }
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permissions are denied.')),
+          );
+          return;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location permissions are permanently denied.'),
+          ),
+        );
+        return;
+      }
+      Position pos = await Geolocator.getCurrentPosition();
+      setState(() {
+        _currentLocation = LatLng(pos.latitude, pos.longitude);
+      });
+      _mapController.move(_currentLocation!, _currentZoom);
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error getting location: $e')));
+    }
+  }
 
   // Example safe places near a default location (can be replaced with real data)
   List<Map<String, dynamic>> getSafePlaces(LatLng userLocation) => [
@@ -86,6 +126,9 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
         options: MapOptions(
           initialCenter: defaultCenter,
           initialZoom: _currentZoom,
+          onPositionChanged: (position, hasGesture) {
+            // Optionally, you can update something here if needed
+          },
         ),
         children: [
           TileLayer(
@@ -95,7 +138,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
           ),
           CurrentLocationLayer(),
           MarkerLayer(
-            markers: getSafePlaces(defaultCenter)
+            markers: getSafePlaces(_currentLocation ?? defaultCenter)
                 .map(
                   (s) => Marker(
                     point: s['coords'] as LatLng,
@@ -110,12 +153,26 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: isDownloading ? null : _downloadVisibleArea,
-        label: isDownloading
-            ? const Text('Downloading...')
-            : const Text('Download Area'),
-        icon: const Icon(Icons.download),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: 'currentLocation',
+            onPressed: _centerOnCurrentLocation,
+            tooltip: 'Go to Current Location',
+            child: const Icon(Icons.my_location),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'downloadArea',
+            onPressed: isDownloading ? null : _downloadVisibleArea,
+            label: isDownloading
+                ? const Text('Downloading...')
+                : const Text('Download Area'),
+            icon: const Icon(Icons.download),
+          ),
+        ],
       ),
     );
   }

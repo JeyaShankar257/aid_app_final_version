@@ -1,3 +1,42 @@
+# Flutter/Dart build outputs
+.dart_tool/
+.packages
+build/
+flutter_app/build/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/app.flx
+ios/Flutter/engine/
+ios/Flutter/flutter_assets/
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/ephemeral/
+macos/Flutter/ephemeral/
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+web/.dart_tool/
+web/build/
+
+# IDE files
+.idea/
+.vscode/
+
+# System files
+*.iml
+*.log
+*.tmp
+*.swp
+
+# Dependency lock files (optional for packages)
+# pubspec.lock
+
+# Other
+coverage/
+*.DS_Store
+*.class
+*.jar
+*.war
+*.ear
 # Logs
 logs
 *.log
