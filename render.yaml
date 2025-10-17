@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: aid-app-server
+    env: node
+    repo: https://github.com/JeyaShankar257/aid_app_final_version
+    branch: main
+    plan: starter
+    root: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: SENDER_EMAIL
+        sync: false
+      - key: SENDER_APP_PASSWORD
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
