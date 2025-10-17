@@ -6,8 +6,8 @@ services:
     branch: main
     plan: starter
     root: server
-    buildCommand: npm install
-    startCommand: npm start
+  buildCommand: npm install
+  startCommand: node index.js
     healthCheckPath: /health
     envVars:
       - key: SENDER_EMAIL
