@@ -13,12 +13,10 @@ app.use(bodyParser.json());
 
 // Placeholder for the removed send-sos-email route.
 // We keep a simple endpoint so the server does not break after deleting the old file.
-import express from 'express';
-const apiRouter = express.Router();
-apiRouter.post('/send-sos-email', (req, res) => {
-  res.status(501).json({ error: 'send-sos-email endpoint removed. Use SendGrid helper or implement a new handler.' });
-});
-app.use('/api', apiRouter);
+import sendSosSendGrid from './send-sos-sendgrid.js';
+
+// Mount the SendGrid-backed send-sos route
+app.use('/api', sendSosSendGrid);
 
 app.get('/', (req, res) => {
   res.send('SOS API is running');
