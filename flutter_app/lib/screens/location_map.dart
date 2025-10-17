@@ -15,6 +15,42 @@ class LocationMapScreen extends StatefulWidget {
 }
 
 class _LocationMapScreenState extends State<LocationMapScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _centerOnCurrentLocationOnStart();
+  }
+
+  Future<void> _centerOnCurrentLocationOnStart() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+      if (permission == LocationPermission.deniedForever) return;
+      Position pos = await Geolocator.getCurrentPosition();
+      setState(() {
+        _currentLocation = LatLng(pos.latitude, pos.longitude);
+      });
+      _mapController.move(_currentLocation!, _currentZoom);
+    } catch (_) {
+      // Ignore errors on startup
+    }
+  }
+
+  void _zoomIn() {
+    final newZoom = _mapController.camera.zoom + 1;
+    _mapController.move(_mapController.camera.center, newZoom);
+  }
+
+  void _zoomOut() {
+    final newZoom = _mapController.camera.zoom - 1;
+    _mapController.move(_mapController.camera.center, newZoom);
+  }
+
   int _downloadInstanceId = 0;
   Future<void> _showCachedRegions() async {
     try {
@@ -28,9 +64,15 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
       if (!exists) {
         showDialog(
           context: context,
-          builder: (context) => const AlertDialog(
-            title: Text('Cached Map Tiles'),
-            content: Text('No cache directory found.'),
+          builder: (context) => AlertDialog(
+            title: const Text('Cached Map Tiles'),
+            content: Text('No cache directory found.\n\nPath: ${dir.path}'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
           ),
         );
         return;
@@ -42,7 +84,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
         builder: (context) => AlertDialog(
           title: const Text('Cached Map Tiles'),
           content: tileFiles.isEmpty
-              ? const Text('No cached map tiles found.')
+              ? Text('No cached map tiles found.\n\nPath: ${dir.path}')
               : SizedBox(
                   width: 300,
                   height: 400,
@@ -154,9 +196,12 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
     },
   ];
 
+  double? _downloadProgress; // 0.0 to 1.0
+
   @override
   Widget build(BuildContext context) {
     final defaultCenter = LatLng(20.5937, 78.9629);
+    final mapCenter = _currentLocation ?? defaultCenter;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Location & Safe Places'),
@@ -192,56 +237,119 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
           ),
         ],
       ),
-      body: FlutterMap(
-        mapController: _mapController,
-        options: MapOptions(
-          initialCenter: defaultCenter,
-          initialZoom: _currentZoom,
-          onPositionChanged: (position, hasGesture) {
-            // Optionally, you can update something here if needed
-          },
-        ),
+      body: Stack(
         children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.example.flutter_app',
-            tileProvider: store.getTileProvider(),
-          ),
-          CurrentLocationLayer(),
-          MarkerLayer(
-            markers: getSafePlaces(_currentLocation ?? defaultCenter)
-                .map(
-                  (s) => Marker(
-                    point: s['coords'] as LatLng,
-                    child: Icon(
-                      s['icon'] as IconData,
-                      color: s['color'] as Color,
-                      size: 28,
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: mapCenter,
+              initialZoom: _currentZoom,
+              onPositionChanged: (position, hasGesture) {
+                // Optionally, you can update something here if needed
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.flutter_app',
+              ),
+              CurrentLocationLayer(),
+              MarkerLayer(
+                markers: [
+                  if (_currentLocation != null)
+                    Marker(
+                      point: _currentLocation!,
+                      width: 40,
+                      height: 40,
+                      child: Icon(
+                        Icons.my_location,
+                        color: Colors.red,
+                        size: 36,
+                      ),
+                    ),
+                  ...getSafePlaces(_currentLocation ?? defaultCenter).map(
+                    (s) => Marker(
+                      point: s['coords'] as LatLng,
+                      child: Icon(
+                        s['icon'] as IconData,
+                        color: s['color'] as Color,
+                        size: 28,
+                      ),
                     ),
                   ),
-                )
-                .toList(),
+                ],
+              ),
+            ],
           ),
-        ],
-      ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: 'currentLocation',
-            onPressed: _centerOnCurrentLocation,
-            tooltip: 'Go to Current Location',
-            child: const Icon(Icons.my_location),
+          // Zoom buttons in top right
+          Positioned(
+            top: 16,
+            right: 16,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    tooltip: 'Zoom In',
+                    onPressed: _zoomIn,
+                  ),
+                  const Divider(height: 1),
+                  IconButton(
+                    icon: const Icon(Icons.remove),
+                    tooltip: 'Zoom Out',
+                    onPressed: _zoomOut,
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          FloatingActionButton.extended(
-            heroTag: 'downloadArea',
-            onPressed: isDownloading ? null : _downloadVisibleArea,
-            label: isDownloading
-                ? const Text('Downloading...')
-                : const Text('Cache Map Area'),
-            icon: const Icon(Icons.download),
+          // Floating action buttons (bottom right)
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton(
+                  heroTag: 'currentLocation',
+                  onPressed: _centerOnCurrentLocation,
+                  tooltip: 'Go to Current Location',
+                  child: const Icon(Icons.my_location),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'downloadArea',
+                  onPressed: isDownloading ? null : _downloadVisibleArea,
+                  label: isDownloading
+                      ? const Text('Downloading...')
+                      : const Text('Cache Map Area'),
+                  icon: const Icon(Icons.download),
+                ),
+                if (_downloadProgress != null) ...{
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: 200,
+                    child: LinearProgressIndicator(
+                      value: _downloadProgress,
+                      minHeight: 8,
+                    ),
+                  ),
+                },
+              ],
+            ),
           ),
         ],
       ),
@@ -249,7 +357,10 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
   }
 
   Future<void> _downloadVisibleArea() async {
-    setState(() => isDownloading = true);
+    setState(() {
+      isDownloading = true;
+      _downloadProgress = 0.0;
+    });
     try {
       // Get the visible bounds from the map controller
       final bounds = _mapController.camera.visibleBounds;
@@ -274,11 +385,19 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
 
       // Use a unique instanceId for each download
       _downloadInstanceId++;
-      store.download.startForeground(
+      final streams = store.download.startForeground(
         region: downloadableRegion,
         instanceId: _downloadInstanceId,
       );
 
+      await for (final event in streams.downloadProgress) {
+        if (!mounted) break;
+        setState(() {
+          // percentageProgress is 0-100, convert to 0-1 for LinearProgressIndicator
+          _downloadProgress = event.percentageProgress / 100.0;
+        });
+      }
+      // When the stream completes, the download is done
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -293,7 +412,12 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
         ).showSnackBar(SnackBar(content: Text('⚠ Error: $e')));
       }
     } finally {
-      setState(() => isDownloading = false);
+      if (mounted) {
+        setState(() {
+          isDownloading = false;
+          _downloadProgress = null;
+        });
+      }
     }
   }
 }

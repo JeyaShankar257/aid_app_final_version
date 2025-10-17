@@ -187,7 +187,9 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
         '🚨 SOS Alert - Emergency Location Update\n\nCurrent Time: ${now.toLocal()}\nCurrent Location: $locationUrl\n\nLast 30 min timeline:\n$timelineStr';
     try {
       final res = await http.post(
-        Uri.parse('http://10.0.2.2:5000/api/send-sos-email'),
+        Uri.parse(
+          'https://aidappfinalversion-production-f72f.up.railway.app/api/send-sos-email',
+        ),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'senderEmail': senderEmailController.text,
