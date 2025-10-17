@@ -19,6 +19,11 @@ app.get('/', (req, res) => {
   res.send('SOS API is running');
 });
 
+// Health check for cloud platforms
+app.get('/health', (req, res) => {
+  res.json({ ok: true, uptime: process.uptime() });
+});
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });

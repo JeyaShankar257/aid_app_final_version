@@ -4,7 +4,10 @@ import nodemailer from 'nodemailer';
 const router = express.Router();
 
 router.post('/send-sos-email', async (req, res) => {
-  const { senderEmail, appPassword, recipients, message } = req.body;
+  // Prefer environment variables for production; fall back to request body for local testing
+  const senderEmail = process.env.SENDER_EMAIL || req.body.senderEmail;
+  const appPassword = process.env.SENDER_APP_PASSWORD || req.body.appPassword;
+  const { recipients, message } = req.body;
   if (!senderEmail || !appPassword || !recipients || recipients.length < 2 || !message) {
     return res.status(400).json({ error: 'Missing required fields or not enough recipients' });
   }
