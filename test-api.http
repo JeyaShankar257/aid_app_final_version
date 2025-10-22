@@ -1,9 +1,10 @@
-POST https://aidappfinalversion-production-f72f.up.railway.app/api/send-sos-email
+POST https://aid-app-final-version.onrender.com/api/send-sos-email
+
 Content-Type: application/json
 
 {
   "senderEmail": "gonly7966@gmail.com",
-  "appPassword": "kzbuqxlcrdyiybnv",
+  
   "recipients": ["mjeyashankar2005@gmail.com", "mjeyashankar189@gmail.com"],
   "message": "Test SOS message from REST Client"
 }
