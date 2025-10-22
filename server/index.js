@@ -15,6 +15,11 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(bodyParser.json());
 
+// When running behind a proxy (like Render), enable trust proxy so
+// express-rate-limit can read the X-Forwarded-* headers safely.
+// See: https://express-rate-limit.github.io/ERR_ERL_UNEXPECTED_X_FORWARDED_FOR/
+app.set('trust proxy', true);
+
 // Initialize Sentry if DSN provided
 if (process.env.SENTRY_DSN) {
   Sentry.init({
