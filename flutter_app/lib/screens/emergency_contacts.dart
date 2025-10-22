@@ -23,7 +23,7 @@ class EmergencyContactsScreen extends StatefulWidget {
 class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   final _formKey = GlobalKey<FormState>();
   TextEditingController senderEmailController = TextEditingController();
-  TextEditingController appPasswordController = TextEditingController();
+  TextEditingController nameController = TextEditingController();
   List<TextEditingController> recipientControllers = [
     TextEditingController(),
     TextEditingController(),
@@ -44,7 +44,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   @override
   void dispose() {
     senderEmailController.dispose();
-    appPasswordController.dispose();
+  // appPasswordController removed; no dispose required
     for (var c in recipientControllers) {
       c.dispose();
     }
@@ -57,8 +57,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
 
   Future<void> _loadFormData() async {
     final prefs = await SharedPreferences.getInstance();
-    senderEmailController.text = prefs.getString('sosSenderEmail') ?? '';
-    appPasswordController.text = prefs.getString('sosAppPassword') ?? '';
+  nameController.text = prefs.getString('sosUserName') ?? '';
     final recipients = prefs.getStringList('sosRecipients') ?? ['', ''];
     for (
       int i = 0;
@@ -76,8 +75,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
 
   Future<void> _saveFormData() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('sosSenderEmail', senderEmailController.text);
-    await prefs.setString('sosAppPassword', appPasswordController.text);
+  await prefs.setString('sosUserName', nameController.text);
     await prefs.setStringList(
       'sosRecipients',
       recipientControllers.map((c) => c.text).toList(),
@@ -139,18 +137,16 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
       ...recipientControllers.map((c) => c.text),
       ...extraRecipientControllers.map((c) => c.text),
     ].where((r) => r.trim().isNotEmpty).toList();
-    if (recipientControllers[0].text.trim().isEmpty ||
-        recipientControllers[1].text.trim().isEmpty) {
+    if (allRecipients.isEmpty) {
       setState(() {
-        status = 'At least 2 recipient emails are required.';
+        status = 'At least one recipient email is required.';
         sending = false;
       });
       return;
     }
-    if (senderEmailController.text.isEmpty ||
-        appPasswordController.text.isEmpty) {
+    if (nameController.text.trim().isEmpty) {
       setState(() {
-        status = 'Sender email and app password are required.';
+        status = 'Your name is required.';
         sending = false;
       });
       return;
@@ -187,15 +183,12 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
         '🚨 SOS Alert - Emergency Location Update\n\nCurrent Time: ${now.toLocal()}\nCurrent Location: $locationUrl\n\nLast 30 min timeline:\n$timelineStr';
     try {
       final res = await http.post(
-        Uri.parse(
-          'https://aidappfinalversion-production-f72f.up.railway.app/api/send-sos-email',
-        ),
+        Uri.parse('https://aid-app-final-version.onrender.com/api/send-sos-email'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'senderEmail': senderEmailController.text,
-          'appPassword': appPasswordController.text,
-          'recipients': allRecipients,
-          'message': message,
+            'name': nameController.text.trim(),
+            'recipients': allRecipients,
+            'message': message,
         }),
       );
       print('SOS email response status: \\${res.statusCode}');
@@ -232,23 +225,13 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               TextFormField(
-                controller: senderEmailController,
-                decoration: InputDecoration(labelText: 'Sender Gmail'),
-                keyboardType: TextInputType.emailAddress,
+                controller: nameController,
+                decoration: InputDecoration(labelText: 'Your name'),
+                keyboardType: TextInputType.name,
                 onChanged: (_) => _saveFormData(),
                 validator: (v) => v == null || v.isEmpty ? 'Required' : null,
               ),
               SizedBox(height: 12),
-              TextFormField(
-                controller: appPasswordController,
-                decoration: InputDecoration(
-                  labelText: 'Sender App Password',
-                  helperText: 'Get app password from Gmail security settings.',
-                ),
-                obscureText: true,
-                onChanged: (_) => _saveFormData(),
-                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-              ),
               SizedBox(height: 12),
               TextFormField(
                 controller: recipientControllers[0],
