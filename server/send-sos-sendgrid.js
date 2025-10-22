@@ -1,4 +1,5 @@
 import express from 'express';
+import { body, validationResult } from 'express-validator';
 import { sendEmail, initSendGrid } from './sendgrid.js';
 
 const router = express.Router();
@@ -7,7 +8,16 @@ const router = express.Router();
 initSendGrid();
 
 // POST /api/send-sos-email
-router.post('/send-sos-email', async (req, res) => {
+router.post('/send-sos-email',
+  // validation middleware
+  body('recipients').isArray({ min: 1 }).withMessage('recipients must be a non-empty array'),
+  body('recipients.*').isEmail().withMessage('each recipient must be a valid email'),
+  body('message').isString().isLength({ min: 1, max: 5000 }).withMessage('message is required and must be <= 5000 chars'),
+  async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
   const { recipients, message } = req.body;
   const from = process.env.SENDER_EMAIL || req.body.senderEmail;
 
@@ -25,8 +35,8 @@ router.post('/send-sos-email', async (req, res) => {
   }
 
   try {
-    await sendEmail({ from, to: recipients, subject: '🚨 SOS Alert', text: message, html: `<p>${message}</p>` });
-    return res.json({ success: true });
+    const sendResult = await sendEmail({ from, to: recipients, subject: '🚨 SOS Alert', text: message, html: `<p>${message}</p>` });
+    return res.json({ success: true, sent: sendResult });
   } catch (err) {
     console.error('SendGrid send error:', err?.message || err);
     return res.status(500).json({ error: 'Failed to send email', details: err?.message || String(err) });
