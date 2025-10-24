@@ -44,7 +44,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   @override
   void dispose() {
     senderEmailController.dispose();
-  // appPasswordController removed; no dispose required
+    // appPasswordController removed; no dispose required
     for (var c in recipientControllers) {
       c.dispose();
     }
@@ -57,7 +57,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
 
   Future<void> _loadFormData() async {
     final prefs = await SharedPreferences.getInstance();
-  nameController.text = prefs.getString('sosUserName') ?? '';
+    nameController.text = prefs.getString('sosUserName') ?? '';
     final recipients = prefs.getStringList('sosRecipients') ?? ['', ''];
     for (
       int i = 0;
@@ -75,7 +75,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
 
   Future<void> _saveFormData() async {
     final prefs = await SharedPreferences.getInstance();
-  await prefs.setString('sosUserName', nameController.text);
+    await prefs.setString('sosUserName', nameController.text);
     await prefs.setStringList(
       'sosRecipients',
       recipientControllers.map((c) => c.text).toList(),
@@ -183,12 +183,14 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
         '🚨 SOS Alert - Emergency Location Update\n\nCurrent Time: ${now.toLocal()}\nCurrent Location: $locationUrl\n\nLast 30 min timeline:\n$timelineStr';
     try {
       final res = await http.post(
-        Uri.parse('https://aid-app-final-version.onrender.com/api/send-sos-email'),
+        Uri.parse(
+          'https://aid-app-final-version.onrender.com/api/send-sos-email',
+        ),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-            'name': nameController.text.trim(),
-            'recipients': allRecipients,
-            'message': message,
+          'name': nameController.text.trim(),
+          'recipients': allRecipients,
+          'message': message,
         }),
       );
       print('SOS email response status: \\${res.statusCode}');
@@ -264,23 +266,33 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
               ),
               Row(
                 children: [
-                  OutlinedButton(
-                    onPressed: _addExtraRecipient,
-                    child: Text('Add More Recipient'),
+                  Expanded(
+                    flex: 1,
+                    child: OutlinedButton(
+                      onPressed: _addExtraRecipient,
+                      child: FittedBox(child: Text('Add More Recipient')),
+                    ),
                   ),
                   SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: sending
-                        ? null
-                        : () {
-                            if (_formKey.currentState?.validate() ?? false) {
-                              _sendSOS();
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: sending
+                          ? null
+                          : () {
+                              if (_formKey.currentState?.validate() ?? false) {
+                                _sendSOS();
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                      ),
+                      child: FittedBox(
+                        child: Text(
+                          sending ? 'Sending SOS...' : 'Send SOS Email',
+                        ),
+                      ),
                     ),
-                    child: Text(sending ? 'Sending SOS...' : 'Send SOS Email'),
                   ),
                 ],
               ),

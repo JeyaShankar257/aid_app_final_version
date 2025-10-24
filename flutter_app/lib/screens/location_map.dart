@@ -19,6 +19,11 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
   void initState() {
     super.initState();
     _centerOnCurrentLocationOnStart();
+    // Initialize the FMTC tile provider so FlutterMap will use cached tiles
+    // when available and fall back to the network otherwise.
+    _tileProvider = FMTCTileProvider(
+      stores: const {'offline': BrowseStoreStrategy.readUpdateCreate},
+    );
   }
 
   Future<void> _centerOnCurrentLocationOnStart() async {
@@ -124,6 +129,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
   final MapController _mapController = MapController();
   final double _currentZoom = 15.0;
   final store = FMTCStore('offline');
+  late final FMTCTileProvider _tileProvider;
   bool isDownloading = false;
   LatLng? _currentLocation;
   Future<void> _centerOnCurrentLocation() async {
@@ -231,9 +237,38 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
             },
           ),
           IconButton(
+            icon: const Icon(Icons.wifi_off),
+            tooltip: 'Test Offline (instructions)',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Test Offline Maps'),
+                  content: const Text(
+                    'To test offline tiles: first use "Cache Map Area" to download tiles for the area you want.\n\n'
+                    'Then disable network on your device (Airplane mode) or the emulator, and revisit the cached area in the map.\n\n'
+                    'On an Android emulator you can run:\nadb shell svc wifi disable\nadb shell svc data disable\n\n'
+                    'Note: adb commands require a connected device and a debug build.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.storage),
             tooltip: 'View Cached Map Areas',
             onPressed: _showCachedRegions,
+          ),
+          IconButton(
+            icon: const Icon(Icons.dataset),
+            tooltip: 'Manage Offline Store',
+            onPressed: _showStoreStats,
           ),
         ],
       ),
@@ -252,6 +287,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.flutter_app',
+                tileProvider: _tileProvider,
               ),
               CurrentLocationLayer(),
               MarkerLayer(
@@ -418,6 +454,139 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
           _downloadProgress = null;
         });
       }
+    }
+  }
+
+  Future<void> _showStoreStats() async {
+    try {
+      final ready = await store.manage.ready;
+      if (!ready) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Store Not Ready'),
+            content: Text(
+              'The offline store "${store.storeName}" does not exist.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      final stats = store.stats;
+      final length = await stats.length;
+      final sizeKiB = await stats.size; // KiB
+      final hits = await stats.hits;
+      final misses = await stats.misses;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Store: ${store.storeName}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tiles: $length'),
+              Text('Approx. Size: ${sizeKiB.toStringAsFixed(1)} KiB'),
+              Text('Hits: $hits'),
+              Text('Misses: $misses'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Confirm Reset'),
+                    content: const Text('Remove all tiles from this store?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Reset'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  await store.manage.reset();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Store reset (tiles removed).'),
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Reset Store'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Confirm Delete'),
+                    content: const Text(
+                      'Delete this store entirely (cannot be undone)?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  await store.manage.delete();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Store deleted.')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Delete Store'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('Failed to retrieve store stats: $e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
     }
   }
 }
