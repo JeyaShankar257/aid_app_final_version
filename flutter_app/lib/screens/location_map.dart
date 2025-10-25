@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
@@ -67,6 +69,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
       final dir = cacheDir;
       final exists = await dir.exists();
       if (!exists) {
+        if (!mounted) return;
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -84,6 +87,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
       }
       final files = await dir.list(recursive: true).toList();
       final tileFiles = files.whereType<File>().toList();
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -116,6 +120,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -132,31 +137,35 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
   late final FMTCTileProvider _tileProvider;
   bool isDownloading = false;
   LatLng? _currentLocation;
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  // Nearby places fetched from Overpass (OSM)
+  List<Map<String, dynamic>> _nearbyPlaces = [];
+  bool _loadingPlaces = false;
+  final int _placesRadiusMeters = 2000; // default search radius
   Future<void> _centerOnCurrentLocation() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location services are disabled.')),
-        );
+        _showSnack('Location services are disabled.');
         return;
       }
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permissions are denied.')),
-          );
+          _showSnack('Location permissions are denied.');
           return;
         }
       }
       if (permission == LocationPermission.deniedForever) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location permissions are permanently denied.'),
-          ),
-        );
+        _showSnack('Location permissions are permanently denied.');
         return;
       }
       Position pos = await Geolocator.getCurrentPosition();
@@ -164,10 +173,10 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
         _currentLocation = LatLng(pos.latitude, pos.longitude);
       });
       _mapController.move(_currentLocation!, _currentZoom);
+      // Fetch real nearby safe places after obtaining location
+      await _fetchNearbySafePlaces();
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error getting location: $e')));
+      _showSnack('Error getting location: $e');
     }
   }
 
@@ -202,6 +211,96 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
     },
   ];
 
+  /// Fetch nearby safe places (hospital, police, fire_station) from Overpass API
+  Future<void> _fetchNearbySafePlaces({int? radiusMeters}) async {
+    if (_currentLocation == null) return;
+    final radius = radiusMeters ?? _placesRadiusMeters;
+    setState(() {
+      _loadingPlaces = true;
+    });
+    try {
+      final url = Uri.parse('https://overpass-api.de/api/interpreter');
+      final query =
+          '''
+      [out:json][timeout:25];
+      (
+        node["amenity"~"hospital|police|fire_station"](around:$radius,${_currentLocation!.latitude},${_currentLocation!.longitude});
+        way["amenity"~"hospital|police|fire_station"](around:$radius,${_currentLocation!.latitude},${_currentLocation!.longitude});
+        relation["amenity"~"hospital|police|fire_station"](around:$radius,${_currentLocation!.latitude},${_currentLocation!.longitude});
+      );
+      out center;
+      ''';
+
+      final resp = await http.post(url, body: {'data': query});
+      if (resp.statusCode != 200) {
+        throw Exception('Overpass API returned ${resp.statusCode}');
+      }
+      final decoded = jsonDecode(resp.body) as Map<String, dynamic>;
+      final elements = decoded['elements'] as List<dynamic>? ?? [];
+      final results = <Map<String, dynamic>>[];
+      for (final e in elements) {
+        final Map<String, dynamic> elem = Map<String, dynamic>.from(e as Map);
+        double? lat, lon;
+        if (elem['type'] == 'node' &&
+            elem.containsKey('lat') &&
+            elem.containsKey('lon')) {
+          lat = (elem['lat'] as num).toDouble();
+          lon = (elem['lon'] as num).toDouble();
+        } else if (elem.containsKey('center')) {
+          final center = elem['center'] as Map<String, dynamic>;
+          lat = (center['lat'] as num).toDouble();
+          lon = (center['lon'] as num).toDouble();
+        } else {
+          continue; // can't determine coords
+        }
+        final tags = elem['tags'] as Map<String, dynamic>?;
+        final amenity = tags != null && tags['amenity'] != null
+            ? tags['amenity'] as String
+            : 'place';
+        final name = tags != null && tags['name'] != null
+            ? tags['name'] as String
+            : amenity;
+        IconData icon = Icons.place;
+        Color color = Colors.purple;
+        if (amenity == 'hospital') {
+          icon = Icons.local_hospital;
+          color = Colors.green;
+        } else if (amenity == 'police') {
+          icon = Icons.local_police;
+          color = Colors.blue;
+        } else if (amenity == 'fire_station') {
+          icon = Icons.local_fire_department;
+          color = Colors.orange;
+        }
+        results.add({
+          'name': name,
+          'coords': LatLng(lat, lon),
+          'amenity': amenity,
+          'icon': icon,
+          'color': color,
+        });
+      }
+
+      // Optionally sort by distance from current location
+      results.sort((a, b) {
+        final dist = Distance();
+        final da = dist(_currentLocation!, (a['coords'] as LatLng));
+        final db = dist(_currentLocation!, (b['coords'] as LatLng));
+        return da.compareTo(db);
+      });
+
+      setState(() {
+        _nearbyPlaces = results;
+      });
+    } catch (e) {
+      _showSnack('Failed to fetch nearby places: $e');
+    } finally {
+      setState(() {
+        _loadingPlaces = false;
+      });
+    }
+  }
+
   double? _downloadProgress; // 0.0 to 1.0
 
   @override
@@ -216,6 +315,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
             icon: const Icon(Icons.info_outline),
             tooltip: 'Offline Map Info',
             onPressed: () {
+              if (!mounted) return;
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
@@ -240,6 +340,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
             icon: const Icon(Icons.wifi_off),
             tooltip: 'Test Offline (instructions)',
             onPressed: () {
+              if (!mounted) return;
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
@@ -269,6 +370,23 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
             icon: const Icon(Icons.dataset),
             tooltip: 'Manage Offline Store',
             onPressed: _showStoreStats,
+          ),
+          // Fetch nearby safe places from Overpass
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6.0),
+            child: _loadingPlaces
+                ? const SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.place),
+                    tooltip: 'Find Nearby Safe Places',
+                    onPressed: _fetchNearbySafePlaces,
+                  ),
           ),
         ],
       ),
@@ -303,16 +421,23 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                         size: 36,
                       ),
                     ),
-                  ...getSafePlaces(_currentLocation ?? defaultCenter).map(
-                    (s) => Marker(
-                      point: s['coords'] as LatLng,
-                      child: Icon(
-                        s['icon'] as IconData,
-                        color: s['color'] as Color,
-                        size: 28,
-                      ),
-                    ),
-                  ),
+                  // Show fetched nearby places if available, otherwise show example places
+                  ...((_nearbyPlaces.isNotEmpty
+                          ? _nearbyPlaces
+                          : getSafePlaces(_currentLocation ?? defaultCenter))
+                      .map(
+                        (s) => Marker(
+                          point: s['coords'] as LatLng,
+                          width: 36,
+                          height: 36,
+                          child: Icon(
+                            s['icon'] as IconData,
+                            color: s['color'] as Color,
+                            size: 28,
+                          ),
+                        ),
+                      )
+                      .toList()),
                 ],
               ),
             ],
@@ -461,6 +586,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
     try {
       final ready = await store.manage.ready;
       if (!ready) {
+        if (!mounted) return;
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -485,6 +611,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
       final hits = await stats.hits;
       final misses = await stats.misses;
 
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -522,13 +649,12 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                 );
                 if (confirm == true) {
                   await store.manage.reset();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Store reset (tiles removed).'),
-                      ),
-                    );
-                  }
+                  if (!mounted) return;
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                    const SnackBar(
+                      content: Text('Store reset (tiles removed).'),
+                    ),
+                  );
                 }
               },
               child: const Text('Reset Store'),
@@ -556,10 +682,28 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                   ),
                 );
                 if (confirm == true) {
-                  await store.manage.delete();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  // Prevent deleting the store while our widget is performing a download
+                  if (isDownloading) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Cannot delete store while a download is in progress.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  try {
+                    await store.manage.delete();
+                    if (!mounted) return;
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                       const SnackBar(content: Text('Store deleted.')),
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                      SnackBar(content: Text('Failed to delete store: $e')),
                     );
                   }
                 }
