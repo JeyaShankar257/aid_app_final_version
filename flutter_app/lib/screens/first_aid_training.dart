@@ -209,13 +209,12 @@ class _FirstAidTrainingScreenState extends State<FirstAidTrainingScreen> {
                   ),
                   SizedBox(height: 16),
                   Expanded(
-                    child: GridView.count(
-                      crossAxisCount: MediaQuery.of(context).size.width > 800
-                          ? 3
-                          : 2,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      children: trainingModules.map((module) {
+                    child: ListView.separated(
+                      itemCount: trainingModules.length,
+                      separatorBuilder: (context, index) =>
+                          SizedBox(height: 20),
+                      itemBuilder: (context, index) {
+                        final module = trainingModules[index];
                         return GestureDetector(
                           onTap: () => handleStartModule(module),
                           child: Card(
@@ -224,7 +223,7 @@ class _FirstAidTrainingScreenState extends State<FirstAidTrainingScreen> {
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.all(16.0),
+                              padding: const EdgeInsets.all(20.0),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -239,23 +238,27 @@ class _FirstAidTrainingScreenState extends State<FirstAidTrainingScreen> {
                                           color: Colors.black,
                                         ),
                                       ),
-                                      SizedBox(width: 12),
+                                      SizedBox(width: 16),
                                       Expanded(
                                         child: Text(
                                           module.title,
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
+                                            fontSize: 16,
                                           ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                  SizedBox(height: 8),
+                                  SizedBox(height: 12),
                                   Text(
                                     module.description,
-                                    style: TextStyle(color: Colors.grey[700]),
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: 15,
+                                    ),
                                   ),
-                                  SizedBox(height: 8),
+                                  SizedBox(height: 12),
                                   Row(
                                     children: [
                                       Icon(
@@ -266,13 +269,13 @@ class _FirstAidTrainingScreenState extends State<FirstAidTrainingScreen> {
                                       SizedBox(width: 4),
                                       Text(
                                         module.duration,
-                                        style: TextStyle(fontSize: 12),
+                                        style: TextStyle(fontSize: 13),
                                       ),
-                                      SizedBox(width: 12),
+                                      SizedBox(width: 16),
                                       Container(
                                         padding: EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 2,
+                                          horizontal: 10,
+                                          vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
                                           color: getDifficultyColor(
@@ -284,12 +287,12 @@ class _FirstAidTrainingScreenState extends State<FirstAidTrainingScreen> {
                                         ),
                                         child: Text(
                                           module.difficulty,
-                                          style: TextStyle(fontSize: 12),
+                                          style: TextStyle(fontSize: 13),
                                         ),
                                       ),
                                     ],
                                   ),
-                                  SizedBox(height: 8),
+                                  SizedBox(height: 12),
                                   LinearProgressIndicator(
                                     value: module.progress / 100,
                                     backgroundColor: Colors.grey[300],
@@ -297,17 +300,17 @@ class _FirstAidTrainingScreenState extends State<FirstAidTrainingScreen> {
                                         ? Colors.green
                                         : Colors.blue,
                                   ),
-                                  SizedBox(height: 4),
+                                  SizedBox(height: 6),
                                   Text(
                                     '${module.progress}% Complete',
-                                    style: TextStyle(fontSize: 12),
+                                    style: TextStyle(fontSize: 13),
                                   ),
                                 ],
                               ),
                             ),
                           ),
                         );
-                      }).toList(),
+                      },
                     ),
                   ),
                 ],

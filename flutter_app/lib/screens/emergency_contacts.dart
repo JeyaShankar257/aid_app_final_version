@@ -176,11 +176,12 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     ];
     String timelineStr = '';
     for (int i = 0; i < timeline.length; i++) {
+      final minuteMark = 3 * i;
       timelineStr +=
-          '${i + 1}. ${timeline[i].time} - https://maps.google.com/?q=${timeline[i].lat},${timeline[i].lng}\n';
+          '${i + 1}. [${minuteMark} min ago] ${timeline[i].time} - https://maps.google.com/?q=${timeline[i].lat},${timeline[i].lng}\n';
     }
     final message =
-        '🚨 SOS Alert - Emergency Location Update\n\nCurrent Time: ${now.toLocal()}\nCurrent Location: $locationUrl\n\nLast 30 min timeline:\n$timelineStr';
+        '🚨 SOS Alert - Emergency Location Update\n\nUser: ${nameController.text.trim()}\nCurrent Time: ${now.toLocal()}\nCurrent Location: $locationUrl\n\nLast 30 min timeline (3 min intervals):\n$timelineStr';
     try {
       final res = await http.post(
         Uri.parse(
@@ -254,13 +255,41 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
               ...extraRecipientControllers.asMap().entries.map(
                 (entry) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: TextFormField(
-                    controller: entry.value,
-                    decoration: InputDecoration(
-                      labelText: 'Recipient Email ${entry.key + 3} (optional)',
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                    onChanged: (_) => _saveFormData(),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 4,
+                        child: TextFormField(
+                          controller: entry.value,
+                          decoration: InputDecoration(
+                            labelText:
+                                'Recipient Email ${entry.key + 3} (optional)',
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                          onChanged: (_) => _saveFormData(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.remove_circle,
+                            color: Colors.red,
+                          ),
+                          tooltip: 'Remove this recipient',
+                          onPressed: () {
+                            setState(() {
+                              extraRecipientControllers
+                                  .removeAt(entry.key)
+                                  .dispose();
+                              _saveFormData();
+                            });
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

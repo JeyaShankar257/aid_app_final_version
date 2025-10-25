@@ -59,77 +59,6 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
   }
 
   int _downloadInstanceId = 0;
-  Future<void> _showCachedRegions() async {
-    try {
-      // Get the app support directory and construct the FMTC cache path for 'offline' store
-      final baseDir = await getApplicationSupportDirectory();
-      final cacheDir = Directory(
-        '${baseDir.path}/flutter_map_tile_caching/offline',
-      );
-      final dir = cacheDir;
-      final exists = await dir.exists();
-      if (!exists) {
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Cached Map Tiles'),
-            content: Text('No cache directory found.\n\nPath: ${dir.path}'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
-      final files = await dir.list(recursive: true).toList();
-      final tileFiles = files.whereType<File>().toList();
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Cached Map Tiles'),
-          content: tileFiles.isEmpty
-              ? Text('No cached map tiles found.\n\nPath: ${dir.path}')
-              : SizedBox(
-                  width: 300,
-                  height: 400,
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: tileFiles.length,
-                    itemBuilder: (context, index) {
-                      final file = tileFiles[index];
-                      return ListTile(
-                        title: Text(
-                          file.path.split(Platform.pathSeparator).last,
-                        ),
-                        subtitle: Text(file.path),
-                      );
-                    },
-                  ),
-                ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Error'),
-          content: Text('Failed to list cached tiles: $e'),
-        ),
-      );
-    }
-  }
 
   final MapController _mapController = MapController();
   final double _currentZoom = 15.0;
@@ -360,11 +289,6 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                 ),
               );
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.storage),
-            tooltip: 'View Cached Map Areas',
-            onPressed: _showCachedRegions,
           ),
           IconButton(
             icon: const Icon(Icons.dataset),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 // import 'screens/emergency_chatbot.dart';
 import 'screens/emergency_contacts.dart';
-import 'screens/emergency_dashboard.dart';
 import 'screens/emergency_log.dart';
 import 'screens/first_aid_training.dart';
 import 'screens/location_map.dart';
@@ -75,7 +74,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   static const List<String> _screenTitles = [
     'Emergency Contacts',
-    'Emergency Dashboard',
     'Emergency Log',
     'First Aid Training',
     'Location Map',
@@ -85,7 +83,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   static final List<Widget> _screens = [
     EmergencyContactsScreen(),
-    EmergencyDashboardScreen(),
     EmergencyLogScreen(),
     FirstAidTrainingScreen(),
     LocationMapScreen(),
