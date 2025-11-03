@@ -1,13 +1,13 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
-import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map/flutter_map.dart' show PolygonLayer, Polygon;
 import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:path_provider/path_provider.dart';
 
 class LocationMapScreen extends StatefulWidget {
   const LocationMapScreen({super.key});
@@ -17,6 +17,40 @@ class LocationMapScreen extends StatefulWidget {
 }
 
 class _LocationMapScreenState extends State<LocationMapScreen> {
+  // List of cached area bounds (each as [southWest, northEast])
+  List<List<LatLng>> _cachedAreas = [];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadCachedAreas();
+  }
+
+  Future<void> _loadCachedAreas() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getStringList('cachedAreas') ?? [];
+    setState(() {
+      _cachedAreas = cached.map((s) {
+        final parts = s.split(',');
+        return [
+          LatLng(double.parse(parts[0]), double.parse(parts[1])), // SW
+          LatLng(double.parse(parts[2]), double.parse(parts[3])), // NE
+        ];
+      }).toList();
+    });
+  }
+
+  Future<void> _saveCachedAreas() async {
+    final prefs = await SharedPreferences.getInstance();
+    final toSave = _cachedAreas
+        .map(
+          (b) =>
+              '${b[0].latitude},${b[0].longitude},${b[1].latitude},${b[1].longitude}',
+        )
+        .toList();
+    await prefs.setStringList('cachedAreas', toSave);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -295,7 +329,6 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
             tooltip: 'Manage Offline Store',
             onPressed: _showStoreStats,
           ),
-          // Fetch nearby safe places from Overpass
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6.0),
             child: _loadingPlaces
@@ -321,16 +354,32 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
             options: MapOptions(
               initialCenter: mapCenter,
               initialZoom: _currentZoom,
-              onPositionChanged: (position, hasGesture) {
-                // Optionally, you can update something here if needed
-              },
+              onPositionChanged: (position, hasGesture) {},
             ),
-            children: [
+            children: <Widget>[
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.flutter_app',
                 tileProvider: _tileProvider,
               ),
+              if (_cachedAreas.isNotEmpty)
+                PolygonLayer(
+                  polygons: _cachedAreas.map((bounds) {
+                    final sw = bounds[0];
+                    final ne = bounds[1];
+                    return Polygon(
+                      points: [
+                        sw,
+                        LatLng(sw.latitude, ne.longitude),
+                        ne,
+                        LatLng(ne.latitude, sw.longitude),
+                      ],
+                      color: Colors.green.withOpacity(0.18),
+                      borderStrokeWidth: 2,
+                      borderColor: Colors.green,
+                    );
+                  }).toList(),
+                ),
               CurrentLocationLayer(),
               MarkerLayer(
                 markers: [
@@ -345,7 +394,6 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                         size: 36,
                       ),
                     ),
-                  // Show fetched nearby places if available, otherwise show example places
                   ...((_nearbyPlaces.isNotEmpty
                           ? _nearbyPlaces
                           : getSafePlaces(_currentLocation ?? defaultCenter))
@@ -366,7 +414,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
               ),
             ],
           ),
-          // Zoom buttons in top right
+          // Zoom controls (top right)
           Positioned(
             top: 16,
             right: 16,
@@ -423,7 +471,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                       : const Text('Cache Map Area'),
                   icon: const Icon(Icons.download),
                 ),
-                if (_downloadProgress != null) ...{
+                if (_downloadProgress != null) ...[
                   const SizedBox(height: 12),
                   SizedBox(
                     width: 200,
@@ -432,7 +480,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                       minHeight: 8,
                     ),
                   ),
-                },
+                ],
               ],
             ),
           ),
@@ -483,6 +531,13 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
         });
       }
       // When the stream completes, the download is done
+      // Save the bounds of the downloaded area
+      final sw = bounds.southWest;
+      final ne = bounds.northEast;
+      setState(() {
+        _cachedAreas.add([sw, ne]);
+      });
+      await _saveCachedAreas();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -551,38 +606,6 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Confirm Reset'),
-                    content: const Text('Remove all tiles from this store?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Reset'),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirm == true) {
-                  await store.manage.reset();
-                  if (!mounted) return;
-                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                    const SnackBar(
-                      content: Text('Store reset (tiles removed).'),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Reset Store'),
-            ),
             TextButton(
               onPressed: () async {
                 Navigator.pop(context);
