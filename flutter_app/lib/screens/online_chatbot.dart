@@ -76,7 +76,7 @@ class _OnlineChatbotScreenState extends State<OnlineChatbotScreen> {
       type: MessageType.general,
     ),
   ];
-  String? _apiKey;
+  String? _apiKey = 'AIzaSyDOGV8G2MI8fADNNYow1klKCiPNzQvuEA4';
   bool _showApiKeyInput = false;
   bool _isLoading = false;
 
@@ -88,9 +88,12 @@ class _OnlineChatbotScreenState extends State<OnlineChatbotScreen> {
 
   Future<void> _loadApiKey() async {
     final prefs = await SharedPreferences.getInstance();
+    final storedKey = prefs.getString('gemini_api_key');
     setState(() {
-      _apiKey = prefs.getString('gemini_api_key');
-      _showApiKeyInput = _apiKey == null || _apiKey!.isEmpty;
+      _apiKey = (storedKey == null || storedKey.isEmpty)
+          ? 'AIzaSyDOGV8G2MI8fADNNYow1klKCiPNzQvuEA4'
+          : storedKey;
+      _showApiKeyInput = false;
     });
   }
 
@@ -116,10 +119,7 @@ class _OnlineChatbotScreenState extends State<OnlineChatbotScreen> {
   }
 
   Future<void> _sendMessage(String text) async {
-    if (text.trim().isEmpty || _apiKey == null || _apiKey!.isEmpty) {
-      setState(() {
-        _showApiKeyInput = true;
-      });
+    if (text.trim().isEmpty) {
       return;
     }
     final userMsg = _Message(
@@ -175,7 +175,7 @@ class _OnlineChatbotScreenState extends State<OnlineChatbotScreen> {
       "parts": [
         {
           "text":
-              "You are an expert emergency AI assistant. Always advise users to call emergency services for real emergencies. Be compassionate and clear. Use lists and formatting for instructions.",
+              "You are an expert emergency AI assistant for users in India. Always advise users to call Indian emergency services for real emergencies. Mention these helpline numbers in your advice: 112 (general emergency), 100 (police), 101 (fire), 102 (ambulance). Be compassionate and clear. Use lists and formatting for instructions.",
         },
       ],
     };
